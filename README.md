@@ -1,36 +1,66 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## FDE Technical Challenge: Inbound Carrier Sales
 
-## Getting Started
+This repository contains a working POC for automating inbound carrier calls using Next.js APIs, with mock integrations and a dashboard to visualize outcomes and metrics.
 
-First, run the development server:
+### Features
+- Verify carriers via FMCSA mock (`/api/verify`)
+- Search loads from mock data (`/api/loads`)
+- Negotiate pricing with up to 3 rounds (`/api/negotiate`)
+- Webhook-style agent endpoint for HappyRobot web call trigger (`/api/agent`)
+- Log calls and summarize metrics (`/api/logs`)
+- Dashboard UI at `/dashboard`
+- API key middleware securing `/api/*`
+- Dockerfile for containerization
 
+### Quick Start
+1. Copy env:
+```bash
+cp .env.example .env
+```
+2. Install deps:
+```bash
+npm install
+```
+3. Run dev:
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+4. Visit app:
+ - App POC: http://localhost:3000
+ - Dashboard: http://localhost:3000/dashboard
+
+### Environment Variables
+- `API_KEY`: required for API requests (middleware). Default `dev` in `.env.example`.
+- `NEXT_PUBLIC_API_KEY`: sent by browser to call APIs. Default `dev`.
+
+Clients must send header `x-api-key: <API_KEY>` on all `/api/*` calls.
+
+### API Reference
+- `GET /api/verify?mc=123456` → `{ status, eligible, legalName }`
+- `GET /api/loads?origin=...&destination=...&equipment_type=...` → `{ results: Load[] }`
+- `POST /api/negotiate` body:
+```json
+{ "sessionId": "uuid", "loadId": "L-1001", "listPrice": 2200, "carrierOffer": 2000 }
+```
+Response includes negotiation `state`, optional `systemOffer`, and `done` flag.
+- `POST /api/logs` body: `CallLogEntry` to record a call. `GET /api/logs` returns `{ logs, metrics }`.
+- `POST /api/agent` webhook driving the conversation with steps: `start|verify|search|negotiate|transfer|end`.
+
+### HappyRobot Integration (Web Call Trigger)
+Configure a web call trigger to POST to `https://<host>/api/agent` including `x-api-key` header and JSON body. Suggested flow:
+1. Start: `{ "step": "start" }`
+2. Provide MC: `{ "sessionId": "...", "step": "verify", "mcNumber": "123456" }`
+3. Search: `{ "sessionId": "...", "step": "search", "search": { "origin": "Chicago, IL", "destination": "Dallas, TX", "equipment_type": "Dry Van" } }`
+4. Negotiate counters: `{ "sessionId": "...", "step": "negotiate", "counterOffer": 2000, "transcriptSummary": "good" }`
+5. Accept/transfer: `{ "sessionId": "...", "step": "negotiate", "accept": true }`
+
+### Docker
+Build and run:
+```bash
+docker build -t inbound-carrier-sales .
+docker run -e API_KEY=dev -e NEXT_PUBLIC_API_KEY=dev -p 3000:3000 inbound-carrier-sales
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Notes
+- FMCSA integration is mocked with `verifyCarrier` but the scaffolding is present to swap to a real API.
+- Data is in-memory for simplicity. Replace with DB for persistence.

@@ -1,103 +1,117 @@
-import Image from "next/image";
+"use client";
+import { useCallback, useMemo, useState } from "react";
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [mc, setMc] = useState("");
+  const [verified, setVerified] = useState<any>(null);
+  const [origin, setOrigin] = useState("");
+  const [destination, setDestination] = useState("");
+  const [equipment, setEquipment] = useState("");
+  const [results, setResults] = useState<any[]>([]);
+  const [sessionId, setSessionId] = useState<string>("");
+  const [selected, setSelected] = useState<any>(null);
+  const [systemOffer, setSystemOffer] = useState<number | null>(null);
+  const [carrierOffer, setCarrierOffer] = useState<string>("");
+  const [state, setState] = useState<any>(null);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const headers = useMemo(
+    () => ({ "x-api-key": process.env.NEXT_PUBLIC_API_KEY ?? "dev" }),
+    []
+  );
+
+  const verify = useCallback(async () => {
+    const r = await fetch(`/api/verify?mc=${mc}`, { headers });
+    const data = await r.json();
+    setVerified(data);
+  }, [mc, headers]);
+
+  const search = useCallback(async () => {
+    const params = new URLSearchParams({ origin, destination, equipment_type: equipment });
+    const r = await fetch(`/api/loads?${params.toString()}`, { headers });
+    const data = await r.json();
+    setResults(data.results ?? []);
+  }, [origin, destination, equipment, headers]);
+
+  const startNegotiation = useCallback(async (load: any) => {
+    const sid = crypto.randomUUID();
+    setSessionId(sid);
+    setSelected(load);
+    const r = await fetch(`/api/negotiate`, {
+      method: "POST",
+      headers: { ...headers, "content-type": "application/json" },
+      body: JSON.stringify({ sessionId: sid, loadId: load.load_id, listPrice: load.loadboard_rate }),
+    });
+    const data = await r.json();
+    setState(data.state);
+    const lastSystem = data.state?.offers?.filter((o: any) => o.by === "system").slice(-1)[0];
+    setSystemOffer(lastSystem?.proposedRate ?? load.loadboard_rate);
+  }, [headers]);
+
+  const counter = useCallback(async () => {
+    if (!selected || !sessionId) return;
+    const r = await fetch(`/api/negotiate`, {
+      method: "POST",
+      headers: { ...headers, "content-type": "application/json" },
+      body: JSON.stringify({
+        sessionId,
+        loadId: selected.load_id,
+        listPrice: selected.loadboard_rate,
+        carrierOffer: Number(carrierOffer || 0),
+      }),
+    });
+    const data = await r.json();
+    setState(data.state);
+    setSystemOffer(data.systemOffer?.proposedRate ?? null);
+  }, [headers, sessionId, selected, carrierOffer]);
+
+  return (
+    <div className="max-w-5xl mx-auto p-6 space-y-6">
+      <h1 className="text-3xl font-bold">Inbound Carrier Sales - POC</h1>
+      <section className="space-y-3">
+        <div className="flex gap-2 items-end">
+          <div>
+            <label className="block text-sm text-gray-600">MC Number</label>
+            <input className="border rounded px-3 py-2" value={mc} onChange={(e) => setMc(e.target.value)} />
+          </div>
+          <button className="px-3 py-2 rounded bg-black text-white" onClick={verify}>Verify</button>
+          {verified && (
+            <span className="text-sm">
+              {verified.eligible ? "Eligible" : "Not eligible"}
+              {verified.legalName ? ` • ${verified.legalName}` : ""}
+            </span>
+          )}
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </section>
+      <section className="space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+          <input placeholder="Origin" className="border rounded px-3 py-2" value={origin} onChange={(e) => setOrigin(e.target.value)} />
+          <input placeholder="Destination" className="border rounded px-3 py-2" value={destination} onChange={(e) => setDestination(e.target.value)} />
+          <input placeholder="Equipment" className="border rounded px-3 py-2" value={equipment} onChange={(e) => setEquipment(e.target.value)} />
+          <button className="px-3 py-2 rounded bg-black text-white" onClick={search}>Search Loads</button>
+        </div>
+        <div className="border rounded divide-y">
+          {results.map((l) => (
+            <div key={l.load_id} className="p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div className="text-sm">
+                <div className="font-medium">{l.origin} → {l.destination} • {l.equipment_type}</div>
+                <div className="text-gray-500">Pickup {new Date(l.pickup_datetime).toLocaleString()} • List ${l.loadboard_rate}</div>
+              </div>
+              <button className="px-3 py-1.5 rounded bg-gray-900 text-white" onClick={() => startNegotiation(l)}>Negotiate</button>
+            </div>
+          ))}
+        </div>
+      </section>
+      {selected && (
+        <section className="space-y-3">
+          <h2 className="text-xl font-semibold">Negotiation</h2>
+          <div className="text-sm">System offer: {systemOffer ? `$${systemOffer}` : "-"}</div>
+          <div className="flex gap-2 items-end">
+            <input placeholder="Your counter" className="border rounded px-3 py-2" value={carrierOffer} onChange={(e) => setCarrierOffer(e.target.value)} />
+            <button className="px-3 py-2 rounded bg-black text-white" onClick={counter}>Send Counter</button>
+          </div>
+          <pre className="text-xs bg-gray-50 p-3 rounded overflow-auto">{JSON.stringify(state, null, 2)}</pre>
+        </section>
+      )}
     </div>
   );
 }
