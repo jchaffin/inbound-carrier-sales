@@ -1,37 +1,45 @@
-// app/api/negotiate/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
-type State = { loadID: string; listPrice: number; round: number };
-const SESSIONS = new Map<string, State>();
+type Session = {
+  loadID: string;
+  listPrice: number;
+  round: number;          // increments when an offer is evaluated
+  lastCounter?: number;   // last counter we gave
+};
 
-function decide(listPrice: number, offer: number, round: number) {
-  const floor = Math.round(listPrice * 0.9); // 90% floor
-  const maxRounds = 3;
+// in-memory session store
+const SESSIONS = new Map<string, Session>();
 
-  // after max rounds → reject outright
-  if (round > maxRounds) {
-    return { decision: "reject", counter: 0, floor, round };
-  }
+// policy knobs
+const MAX_ROUNDS = 3;            // after this -> reject
+const FLOOR_PCT   = 0.90;        // 90% of list is our hard floor
+const STEP_PCT    = 0.05;        // counters step down 5% per round
 
-  // accept if carrier >= floor
-  if (offer >= floor) {
-    return { decision: "accept", counter: offer, floor, round };
-  }
+function firstCounter(listPrice: number) {
+  // first ask: 5% below list
+  return Math.round(listPrice * (1 - STEP_PCT));
+}
 
-  // counter decays 5% per round, never below floor
-  const decay = Math.max(1 - 0.05 * round, floor / listPrice);
-  const counter = Math.max(Math.round(listPrice * decay), floor);
+function floorPrice(listPrice: number) {
+  return Math.round(listPrice * FLOOR_PCT);
+}
 
-  return { decision: "counter", counter, floor, round };
+function counterForRound(listPrice: number, round: number) {
+  // round starts at 1 on first evaluated offer
+  const decayed = Math.round(listPrice * (1 - STEP_PCT * round));
+  return Math.max(decayed, floorPrice(listPrice));
 }
 
 export async function POST(req: NextRequest) {
-  const b = await req.json().catch(() => ({} as any));
-  const sessionID = String((b.sessionID ?? b.sessionId ?? "")).trim();
-  const loadID = String((b.loadID ?? b.loadId ?? "")).trim();
-  const listPrice = Number(b.listPrice ?? b.list_price);
-  const offerRaw = b.carrierOffer ?? b.carrier_offer;
-  const carrierOffer = offerRaw === undefined || offerRaw === null ? undefined : Number(offerRaw);
+  const body = await req.json().catch(() => ({} as any));
+
+  const sessionID = String(body.sessionID || "").trim();
+  const loadID    = String(body.loadID    || "").trim();
+  const listPrice = Number(body.listPrice);
+
+  // carrierOffer can be omitted on the very first call
+  const hasOffer      = body.carrierOffer !== undefined && body.carrierOffer !== null;
+  const carrierOffer  = hasOffer ? Number(body.carrierOffer) : undefined;
 
   if (!sessionID || !loadID || !Number.isFinite(listPrice)) {
     return NextResponse.json(
@@ -40,48 +48,69 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const prev = SESSIONS.get(sessionID) ?? { loadID, listPrice, round: 0 };
+  // init session if new
+  const state = SESSIONS.get(sessionID) ?? { loadID, listPrice, round: 0 };
+  SESSIONS.set(sessionID, state);
 
-  // if no offer yet, start with a high counter (e.g. 105% of list)
-  if (!Number.isFinite(carrierOffer as number)) {
-    const round = prev.round + 1;
-    const floor = Math.round(listPrice * 0.9);
-    const counter = Math.round(listPrice * 1.05);
-    SESSIONS.set(sessionID, { loadID, listPrice, round });
+  // no offer yet -> tell the agent what to ask for first
+  if (!hasOffer) {
+    const seed = firstCounter(listPrice);
+    state.lastCounter = seed;
     return NextResponse.json({
-      decision: "counter",
-      counter,
-      floor,
-      round,
-      state: { sessionID, loadID, listPrice },
+      message: "awaiting_offer",
+      seedCounter: seed,
+      floor: floorPrice(listPrice),
+      state: { sessionID, loadID, listPrice, round: state.round }
     });
   }
 
-  const round = prev.round + 1;
-  SESSIONS.set(sessionID, { loadID, listPrice, round });
+  // evaluate an offer
+  state.round += 1;
 
-  const r = decide(listPrice, carrierOffer as number, round);
-  return NextResponse.json({
-    decision: r.decision,     // "accept" | "counter" | "maxed"
-    counter: r.counter,       // broker counter or null
-    floor: r.floor,
-    round: r.round,
-    state: { sessionID, loadID, listPrice },
-  });
-}
-// Reset negotiation state for a session
-export async function DELETE(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const sessionID = searchParams.get("sessionID");
+  const floor = floorPrice(listPrice);
 
-  if (!sessionID) {
-    return NextResponse.json({ error: "Missing sessionID" }, { status: 400 });
+  // accept if at/above floor
+  if (carrierOffer! >= floor) {
+    return NextResponse.json({
+      decision: "accept",
+      counter: carrierOffer, // accept their price
+      floor,
+      round: state.round,
+      state: { sessionID, loadID, listPrice }
+    });
   }
 
-  const had = SESSIONS.delete(sessionID);
+  // max rounds reached -> hard reject, no counter
+  if (state.round >= MAX_ROUNDS) {
+    return NextResponse.json({
+      decision: "reject",
+      counter: 0,
+      floor,
+      round: state.round,
+      state: { sessionID, loadID, listPrice }
+    });
+  }
+
+  // otherwise counter down by 5% per round, not below floor
+  const ctr = counterForRound(listPrice, state.round);
+  state.lastCounter = ctr;
+
   return NextResponse.json({
-    sessionID,
-    reset: had,
-    message: had ? "Session reset" : "No existing session",
+    decision: "counter",
+    counter: ctr,
+    floor,
+    round: state.round,
+    state: { sessionID, loadID, listPrice }
   });
+}
+
+// Optional: inspect/clear sessions during demos
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url);
+  if (url.searchParams.get("reset") === "1") {
+    SESSIONS.clear();
+    return NextResponse.json({ ok: true, cleared: true });
+  }
+  const dump = Array.from(SESSIONS.entries()).map(([k, v]) => ({ sessionID: k, ...v }));
+  return NextResponse.json({ sessions: dump });
 }
