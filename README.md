@@ -8,6 +8,7 @@ This repository contains a working POC for automating inbound carrier calls usin
 - Negotiate pricing with up to 3 rounds (`/api/negotiate`)
 - Webhook-style agent endpoint for HappyRobot web call trigger (`/api/agent`)
 - Log calls and summarize metrics (`/api/logs`)
+  - Also records HappyRobot session status events at `/api/webhooks/happyrobot/session-status` and exposes status counts via `/api/logs` response field `hrStatusCounts`
 - Dashboard UI at `/dashboard`
 - API key middleware securing `/api/*`
 - Dockerfile for containerization
@@ -32,11 +33,14 @@ npm run dev
 ### Environment Variables
 - `API_KEY`: required for API requests (middleware). Default `dev` in `.env.example`.
 - `NEXT_PUBLIC_API_KEY`: sent by browser to call APIs. Default `dev`.
+- `FMCSA_API_KEY`: when set, `/api/verify` will call the FMCSA API instead of mock data.
+- `FMCSA_BASE_URL` (optional): override FMCSA API base URL. Defaults to `https://api.fmcsa.example`.
 
 Clients must send header `x-api-key: <API_KEY>` on all `/api/*` calls.
 
 ### API Reference
 - `GET /api/verify?mc=123456` → `{ status, eligible, legalName }`
+  - Uses real FMCSA API if `FMCSA_API_KEY` is configured; otherwise falls back to mock verification.
 - `GET /api/loads?origin=...&destination=...&equipment_type=...` → `{ results: Load[] }`
 - `POST /api/negotiate` body:
 ```json
@@ -53,6 +57,12 @@ Configure a web call trigger to POST to `https://<host>/api/agent` including `x-
 3. Search: `{ "sessionId": "...", "step": "search", "search": { "origin": "Chicago, IL", "destination": "Dallas, TX", "equipment_type": "Dry Van" } }`
 4. Negotiate counters: `{ "sessionId": "...", "step": "negotiate", "counterOffer": 2000, "transcriptSummary": "good" }`
 5. Accept/transfer: `{ "sessionId": "...", "step": "negotiate", "accept": true }`
+
+### HappyRobot Session Status Webhook
+Configure the platform to send the CloudEvents payload documented in the HappyRobot docs to:
+`POST /api/webhooks/happyrobot/session-status`
+
+Reference: [HappyRobot session status change webhook](https://docs.happyrobot.ai/webhook-payload-contract/session-status-change)
 
 ### Docker
 Build and run:
