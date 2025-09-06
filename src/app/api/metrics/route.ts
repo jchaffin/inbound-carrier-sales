@@ -1,23 +1,6 @@
 // app/api/metrics/route.ts
 import { NextRequest, NextResponse } from "next/server";
-
-type Row = {
-  session_id: string;
-  timestamp: string;
-  outcome: string;
-  sentiment: string;
-  rounds?: number;
-  decision?: string;
-};
-
-const DB: Row[] = [];
-const COUNT_OUTCOME = new Map<string, number>();
-const COUNT_SENTIMENT = new Map<string, number>();
-const COUNT_DECISION = new Map<string, number>();
-
-function bump(map: Map<string, number>, key: string) {
-  map.set(key, (map.get(key) ?? 0) + 1);
-}
+import { DB, OUT, SEN, DEC, bump, summary, type Row } from "@/lib/metrics";
 
 export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({} as any));
@@ -36,18 +19,13 @@ export async function POST(req: NextRequest) {
   }
 
   DB.push(row);
-  bump(COUNT_OUTCOME, row.outcome.toLowerCase());
-  bump(COUNT_SENTIMENT, row.sentiment.toLowerCase());
-  if (row.decision) bump(COUNT_DECISION, row.decision.toLowerCase());
+  bump(OUT, row.outcome);
+  bump(SEN, row.sentiment);
+  if (row.decision) bump(DEC, row.decision);
 
   return NextResponse.json({ ok: true });
 }
 
 export async function GET() {
-  return NextResponse.json({
-    totals: { calls: DB.length },
-    outcome: Object.fromEntries(COUNT_OUTCOME.entries()),
-    sentiment: Object.fromEntries(COUNT_SENTIMENT.entries()),
-    decision: Object.fromEntries(COUNT_DECISION.entries()),
-  });
+  return NextResponse.json(summary());
 }

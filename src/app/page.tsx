@@ -9,9 +9,10 @@ type Row = {
 };
 
 async function getData() {
+  const base = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
   const [aggRes, listRes] = await Promise.all([
-    fetch(`/api/metrics`, { cache: "no-store", headers: { "x-api-key": process.env.API_KEY ?? "dev" } }),
-    fetch(`/api/metrics/list?limit=25`, { cache: "no-store", headers: { "x-api-key": process.env.API_KEY ?? "dev" } }),
+    fetch(`${base}/api/metrics`, { cache: "no-store", headers: { "x-api-key": process.env.API_KEY ?? "dev" } }),
+    fetch(`${base}/api/metrics/list?limit=25`, { cache: "no-store", headers: { "x-api-key": process.env.API_KEY ?? "dev" } }),
   ]);
   const agg = await aggRes.json();
   const list = await listRes.json();

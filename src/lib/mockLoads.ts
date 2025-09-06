@@ -46,6 +46,17 @@ export const MOCK_LOADS: Load[] = [
     miles: 372,
     dimensions: "48'x102'",
   },
+  {
+    load_id: "L-1004",
+    origin: "Los Angeles, CA",
+    destination: "Phoenix, AZ",
+    pickup_datetime: new Date(Date.now() + 12 * 3600 * 1000).toISOString(),
+    delivery_datetime: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString(),
+    equipment_type: "Reefer",
+    loadboard_rate: 1400,
+    notes: "Maintain 36°F",
+
+  }
 ];
 
 export function searchLoads(query: {

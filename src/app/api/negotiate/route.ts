@@ -27,13 +27,11 @@ function decide(listPrice: number, offer: number, round: number) {
 
 export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({} as any));
-  const sessionID = String(b.sessionID || "").trim();
-  const loadID = String(b.loadID || "").trim();
-  const listPrice = Number(b.listPrice);
-  const carrierOffer =
-    b.carrierOffer === undefined || b.carrierOffer === null
-      ? undefined
-      : Number(b.carrierOffer);
+  const sessionID = String((b.sessionID ?? b.sessionId ?? "")).trim();
+  const loadID = String((b.loadID ?? b.loadId ?? "")).trim();
+  const listPrice = Number(b.listPrice ?? b.list_price);
+  const offerRaw = b.carrierOffer ?? b.carrier_offer;
+  const carrierOffer = offerRaw === undefined || offerRaw === null ? undefined : Number(offerRaw);
 
   if (!sessionID || !loadID || !Number.isFinite(listPrice)) {
     return NextResponse.json(
