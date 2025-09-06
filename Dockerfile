@@ -1,4 +1,5 @@
 # Multi-stage build for Next.js app
+ARG CACHEBUST
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package.json package-lock.json* ./
@@ -6,6 +7,8 @@ COPY package.json package-lock.json* ./
 RUN npm ci
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+# Ensure TS config is not used in image
+RUN rm -f next.config.ts || true
 RUN npm run build
 
 FROM node:20-alpine AS runner
