@@ -30,6 +30,14 @@ export async function verifyCarrier(mcNumber: string): Promise<CarrierVerificati
 }
 
 // Minimal real API fetch with env-configurable base URL
+type FmcsaResponse = {
+  legal_name?: string;
+  name?: string;
+  status?: "active" | "inactive" | string;
+  insurance_valid?: boolean;
+  insurance?: { valid?: boolean };
+};
+
 export async function fetchFromFmcsaApi(mcNumber: string, apiKey: string): Promise<CarrierVerification> {
   const base = process.env.FMCSA_BASE_URL || "https://api.fmcsa.example";
   const url = `${base}/carriers/${encodeURIComponent(mcNumber)}`;
@@ -41,7 +49,7 @@ export async function fetchFromFmcsaApi(mcNumber: string, apiKey: string): Promi
     // 5s timeout via AbortController could be added if desired
   });
   if (!res.ok) throw new Error(`FMCSA ${res.status}`);
-  const data: any = await res.json();
+  const data = (await res.json()) as FmcsaResponse;
   // Normalize fields from hypothetical FMCSA response
   const insuranceValid = Boolean(data?.insurance_valid ?? data?.insurance?.valid);
   const status = (data?.status ?? (insuranceValid ? "active" : "inactive")) as CarrierVerification["status"];

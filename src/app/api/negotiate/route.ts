@@ -31,15 +31,25 @@ function counterForRound(listPrice: number, round: number) {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => ({} as any));
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
 
-  const sessionID = String(body.sessionID || "").trim();
-  const loadID    = String(body.loadID    || "").trim();
-  const listPrice = Number(body.listPrice);
+  // Helper to pick the first defined key (case variants supported)
+  const pick = (...keys: string[]) => {
+    for (const k of keys) {
+      const v = body[k];
+      if (v !== undefined && v !== null && String(v).length > 0) return v;
+    }
+    return undefined;
+  };
+
+  const sessionID = String(pick("sessionID", "sessionId", "session_id") || "").trim();
+  const loadID    = String(pick("loadID", "loadId", "load_id") || "").trim();
+  const listPrice = Number(pick("listPRice", "listPrice", "list_price"));
 
   // carrierOffer can be omitted on the very first call
-  const hasOffer      = body.carrierOffer !== undefined && body.carrierOffer !== null;
-  const carrierOffer  = hasOffer ? Number(body.carrierOffer) : undefined;
+  const offerRaw = pick("carrierOffer", "carrier_offer", "offer");
+  const hasOffer = offerRaw !== undefined && offerRaw !== null && String(offerRaw).length > 0;
+  const carrierOffer = hasOffer ? Number(offerRaw) : undefined;
 
   if (!sessionID || !loadID || !Number.isFinite(listPrice)) {
     return NextResponse.json(
@@ -54,12 +64,15 @@ export async function POST(req: NextRequest) {
 
   // no offer yet -> tell the agent what to ask for first
   if (!hasOffer) {
+    state.round += 1; // increment on first interaction
     const seed = firstCounter(listPrice);
     state.lastCounter = seed;
+    SESSIONS.set(sessionID, state);
     return NextResponse.json({
       message: "awaiting_offer",
       seedCounter: seed,
       floor: floorPrice(listPrice),
+      round: state.round,
       state: { sessionID, loadID, listPrice, round: state.round }
     });
   }

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { DB, OUT, SEN, DEC, bump, summary, type Row } from "@/lib/metrics";
 
 export async function POST(req: NextRequest) {
-  const b = await req.json().catch(() => ({} as any));
+  const b = (await req.json().catch(() => ({}))) as Partial<Row>;
 
   const row: Row = {
     session_id: String(b.session_id || ""),

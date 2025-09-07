@@ -7,7 +7,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   const b = (await request.json()) as Partial<Row>;
-  const row: Row = {
+  const r: Row = {
     session_id: String(b.session_id || crypto.randomUUID()),
     timestamp: String(b.timestamp || new Date().toISOString()),
     outcome: String(b.outcome || "unknown"),
@@ -15,16 +15,9 @@ export async function POST(request: NextRequest) {
     rounds: b.rounds !== undefined ? Number(b.rounds) : undefined,
     decision: b.decision ? String(b.decision) : undefined,
   };
-  DB.push(row);
+  DB.push(r);
   bump(new Map(Object.entries({})), "noop"); // no-op to satisfy import if tree-shaken
-  bumpOutcomeAndSentiment(row);
   return NextResponse.json({ ok: true });
-}
-
-function bumpOutcomeAndSentiment(row: Row) {
-  // Reuse exported bump with local maps through metrics route; here we mirror behavior via metrics API elsewhere.
-  // Since OUT/SEN maps are internal in metrics, route.ts there already bumps when called through metrics endpoints.
-  // This logs route keeps a minimal side-effect by not double-counting.
 }
 
 function normalize(s: ReturnType<typeof summary>) {

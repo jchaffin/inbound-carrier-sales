@@ -35,3 +35,19 @@ export function reset() {
   DB.length = 0;
   OUT.clear(); SEN.clear(); DEC.clear();
 }
+
+// HappyRobot session status events
+export type HrStatusEvent = {
+  id: string;
+  sessionId: string;
+  previous: string;
+  current: string;
+  updatedAt: string;
+  time: string;
+};
+
+export const HR_STATUS_EVENTS: HrStatusEvent[] = [];
+
+export function recordHrStatus(evt: HrStatusEvent) {
+  HR_STATUS_EVENTS.push(evt);
+}

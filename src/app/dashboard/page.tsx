@@ -1,8 +1,19 @@
 "use client";
 import useSWR from "swr";
 
+type Log = {
+  id?: string;
+  mcNumber?: string;
+  loadId?: string;
+  offers?: Array<{ by: string; proposedRate: number; timestamp: string }>;
+  agreedRate?: number;
+  outcome?: string;
+  sentiment?: string;
+  createdAt?: string;
+};
+
 type MetricsResponse = {
-  logs: any[];
+  logs: Log[];
   metrics: {
     totalCalls: number;
     outcomes: Record<string, number>;
@@ -44,7 +55,7 @@ export default function DashboardPage() {
       <section>
         <h2 className="text-xl font-semibold mb-2">Recent Calls</h2>
         <div className="border rounded divide-y">
-          {(data?.logs ?? []).slice(-20).reverse().map((log) => (
+          {((data?.logs ?? []) as Log[]).slice(-20).reverse().map((log) => (
             <div key={log.id} className="p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div className="text-sm">
                 <div className="font-medium">MC {log.mcNumber} → Load {log.loadId ?? "-"}</div>
@@ -53,7 +64,7 @@ export default function DashboardPage() {
               <div className="flex items-center gap-2 text-sm">
                 <Badge>{log.outcome}</Badge>
                 <Badge>{log.sentiment}</Badge>
-                <span className="text-gray-500">{new Date(log.createdAt).toLocaleString()}</span>
+                <span className="text-gray-500">{log.createdAt ? new Date(log.createdAt).toLocaleString() : ""}</span>
               </div>
             </div>
           ))}

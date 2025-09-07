@@ -1,5 +1,5 @@
 # Fly.io app configuration
-app = "inbound-carrier-sales"
+app="inbound-carrier-sales-ff0ca6ba"
 primary_region = "iad"
 
 [build]
@@ -7,7 +7,7 @@ primary_region = "iad"
 
 [env]
   # Update to your Fly app URL if you rename the app
-  NEXT_PUBLIC_BASE_URL = "https://inbound-carrier-sales.fly.dev"
+  NEXT_PUBLIC_BASE_URL = "https://inbound-carrier-sales-ff0ca6ba.fly.dev"
 
 [http_service]
   internal_port = 3000

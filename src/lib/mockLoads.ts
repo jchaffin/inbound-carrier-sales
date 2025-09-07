@@ -8,7 +8,7 @@ export const MOCK_LOADS: Load[] = [
     pickup_datetime: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
     delivery_datetime: new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString(),
     equipment_type: "Dry Van",
-    loadboard_rate: 2200,
+    loadboard_rate: 2200.00,
     notes: "No pallets exchange",
     weight: 38000,
     commodity_type: "Consumer goods",
@@ -23,7 +23,7 @@ export const MOCK_LOADS: Load[] = [
     pickup_datetime: new Date(Date.now() + 12 * 3600 * 1000).toISOString(),
     delivery_datetime: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString(),
     equipment_type: "Reefer",
-    loadboard_rate: 1400,
+    loadboard_rate: 1400.00,               // ← fixed
     notes: "Maintain 36°F",
     weight: 30000,
     commodity_type: "Produce",
@@ -38,7 +38,7 @@ export const MOCK_LOADS: Load[] = [
     pickup_datetime: new Date(Date.now() + 6 * 3600 * 1000).toISOString(),
     delivery_datetime: new Date(Date.now() + 30 * 3600 * 1000).toISOString(),
     equipment_type: "Flatbed",
-    loadboard_rate: 1200,
+    loadboard_rate: 1200.00,
     notes: "Tarp required",
     weight: 42000,
     commodity_type: "Steel",
@@ -53,10 +53,14 @@ export const MOCK_LOADS: Load[] = [
     pickup_datetime: new Date(Date.now() + 12 * 3600 * 1000).toISOString(),
     delivery_datetime: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString(),
     equipment_type: "Reefer",
-    loadboard_rate: 1400,
+    loadboard_rate: 1400.00,
     notes: "Maintain 36°F",
-
-  }
+    weight: 28000,
+    commodity_type: "Food",
+    num_of_pieces: 12,
+    miles: 372,
+    dimensions: "53'x102'",
+  },
 ];
 
 export function searchLoads(query: {
@@ -66,17 +70,18 @@ export function searchLoads(query: {
 }): Load[] {
   const { origin, destination, equipment_type } = query;
   return MOCK_LOADS.filter((l) => {
-    const originMatch = origin
-      ? l.origin.toLowerCase().includes(origin.toLowerCase())
-      : true;
-    const destMatch = destination
-      ? l.destination.toLowerCase().includes(destination.toLowerCase())
-      : true;
-    const equipMatch = equipment_type
-      ? l.equipment_type.toLowerCase() === equipment_type.toLowerCase()
-      : true;
+    const originMatch = origin ? l.origin.toLowerCase().includes(origin.toLowerCase()) : true;
+    const destMatch = destination ? l.destination.toLowerCase().includes(destination.toLowerCase()) : true;
+    const equipMatch = equipment_type ? l.equipment_type.toLowerCase() === equipment_type.toLowerCase() : true;
     return originMatch && destMatch && equipMatch;
   });
 }
 
-
+// If you only want the first match:
+export function findFirstLoad(query: {
+  origin?: string;
+  destination?: string;
+  equipment_type?: string;
+}): Load | undefined {
+  return searchLoads(query)[0];
+}
