@@ -10,17 +10,6 @@ type Session = {
 // in-memory session store
 const SESSIONS = new Map<string, Session>();
 
-import { NextRequest, NextResponse } from "next/server";
-
-type Session = {
-  loadID: string;
-  listPrice: number;
-  round: number;          // increments per evaluation/counter turn
-  lastCounter?: number;   // last counter we gave
-};
-
-const SESSIONS = new Map<string, Session>();
-
 const MAX_ROUNDS = 3;     // after this -> maxxed
 const FLOOR_PCT = 0.90;   // 90% of list is hard floor
 const STEP_PCT  = 0.05;   // counters step down 5% per round
@@ -42,7 +31,7 @@ export async function POST(req: NextRequest) {
 
   const sessionID = String(pick("sessionID", "sessionId", "session_id") || "").trim();
   const loadID    = String(pick("loadID", "loadId", "load_id") || "").trim();
-  const listPrice = Number(pick("listPrice", "list_price", "listPRice")); // support typos/case
+  const listPrice = Number(pick("listPrice", "list_price")); // support typos/case
 
   const offerRaw = pick("carrierOffer", "carrier_offer", "offer");
   const hasOffer = offerRaw !== undefined && offerRaw !== null && String(offerRaw).length > 0;
