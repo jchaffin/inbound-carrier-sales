@@ -44,7 +44,7 @@ function BucketBar({ data }: { data: Record<string, number> }) {
 
 export default async function Dashboard() {
   const { agg, rows } = await getData();
-  const calls = agg?.totals?.calls ?? 0;
+  const calls = (agg?.totals?.calls ?? rows.length ?? 0) as number;
 
   return (
     <main className="mx-auto max-w-6xl p-6 space-y-8">

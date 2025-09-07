@@ -62,5 +62,10 @@ export async function GET(req: NextRequest) {
     numOfPieces: load.num_of_pieces,
   };
 
-  return NextResponse.json(withAliases);
+  // For maximum compat, return both the object and an array wrapper
+  return NextResponse.json({
+    ...withAliases,
+    load: withAliases,
+    results: [withAliases],
+  });
 }
