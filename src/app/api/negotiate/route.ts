@@ -10,30 +10,28 @@ type Session = {
 // in-memory session store
 const SESSIONS = new Map<string, Session>();
 
-// policy knobs
-const MAX_ROUNDS = 3;            // after this -> reject
-const FLOOR_PCT   = 0.90;        // 90% of list is our hard floor
-const STEP_PCT    = 0.05;        // counters step down 5% per round
+import { NextRequest, NextResponse } from "next/server";
 
-function firstCounter(listPrice: number) {
-  // first ask: 5% below list
-  return Math.round(listPrice * (1 - STEP_PCT));
-}
+type Session = {
+  loadID: string;
+  listPrice: number;
+  round: number;          // increments per evaluation/counter turn
+  lastCounter?: number;   // last counter we gave
+};
 
-function floorPrice(listPrice: number) {
-  return Math.round(listPrice * FLOOR_PCT);
-}
+const SESSIONS = new Map<string, Session>();
 
-function counterForRound(listPrice: number, round: number) {
-  // round starts at 1 on first evaluated offer
-  const decayed = Math.round(listPrice * (1 - STEP_PCT * round));
-  return Math.max(decayed, floorPrice(listPrice));
-}
+const MAX_ROUNDS = 3;     // after this -> maxxed
+const FLOOR_PCT = 0.90;   // 90% of list is hard floor
+const STEP_PCT  = 0.05;   // counters step down 5% per round
+
+const firstCounter = (listPrice: number) => Math.round(listPrice * (1 - STEP_PCT));
+const floorPrice  = (listPrice: number) => Math.round(listPrice * FLOOR_PCT);
+const counterForRound = (listPrice: number, round: number) =>
+  Math.max(Math.round(listPrice * (1 - STEP_PCT * round)), floorPrice(listPrice));
 
 export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-
-  // Helper to pick the first defined key (case variants supported)
   const pick = (...keys: string[]) => {
     for (const k of keys) {
       const v = body[k];
@@ -44,9 +42,8 @@ export async function POST(req: NextRequest) {
 
   const sessionID = String(pick("sessionID", "sessionId", "session_id") || "").trim();
   const loadID    = String(pick("loadID", "loadId", "load_id") || "").trim();
-  const listPrice = Number(pick("listPRice", "listPrice", "list_price"));
+  const listPrice = Number(pick("listPrice", "list_price", "listPRice")); // support typos/case
 
-  // carrierOffer can be omitted on the very first call
   const offerRaw = pick("carrierOffer", "carrier_offer", "offer");
   const hasOffer = offerRaw !== undefined && offerRaw !== null && String(offerRaw).length > 0;
   const carrierOffer = hasOffer ? Number(offerRaw) : undefined;
@@ -58,45 +55,44 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // init session if new
+  // init session
   const state = SESSIONS.get(sessionID) ?? { loadID, listPrice, round: 0 };
   SESSIONS.set(sessionID, state);
 
-  // no offer yet -> tell the agent what to ask for first
+  // FIRST CALL (no offer) -> immediately COUNTER
   if (!hasOffer) {
-    state.round += 1; // increment on first interaction
-    const seed = firstCounter(listPrice);
-    state.lastCounter = seed;
+    state.round = 1;
+    const ctr = firstCounter(listPrice);
+    state.lastCounter = ctr;
     SESSIONS.set(sessionID, state);
     return NextResponse.json({
-      message: "awaiting_offer",
-      seedCounter: seed,
+      decision: "counter",
+      counter: ctr,
       floor: floorPrice(listPrice),
       round: state.round,
-      state: { sessionID, loadID, listPrice, round: state.round }
+      state: { sessionID, loadID, listPrice }
     });
   }
 
-  // evaluate an offer
+  // Subsequent calls (evaluate last counter / new offer)
   state.round += 1;
-
   const floor = floorPrice(listPrice);
 
-  // accept if at/above floor
+  // Accept if the supplied offer meets or beats our floor
   if (carrierOffer! >= floor) {
     return NextResponse.json({
       decision: "accept",
-      counter: carrierOffer, // accept their price
+      counter: carrierOffer,
       floor,
       round: state.round,
       state: { sessionID, loadID, listPrice }
     });
   }
 
-  // max rounds reached -> hard reject, no counter
-  if (state.round >= MAX_ROUNDS) {
+  // Hit max rounds -> MAXXED (no further counter)
+  if (state.round > MAX_ROUNDS) {
     return NextResponse.json({
-      decision: "reject",
+      decision: "maxxed",
       counter: 0,
       floor,
       round: state.round,
@@ -104,9 +100,10 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // otherwise counter down by 5% per round, not below floor
+  // Otherwise produce the next counter (5% step, not below floor)
   const ctr = counterForRound(listPrice, state.round);
   state.lastCounter = ctr;
+  SESSIONS.set(sessionID, state);
 
   return NextResponse.json({
     decision: "counter",
@@ -117,7 +114,6 @@ export async function POST(req: NextRequest) {
   });
 }
 
-// Optional: inspect/clear sessions during demos
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   if (url.searchParams.get("reset") === "1") {
